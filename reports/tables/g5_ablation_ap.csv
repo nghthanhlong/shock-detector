@@ -1,0 +1,8 @@
+model,features,n_feat,ap,ci_lo,ci_hi
+A0 log(k),logk,1,0.4266064518395302,0.35849414111965766,0.485031953564363
+A1 họ 1,logk + log_gap + accel + log_since_r1,4,0.42124376880448605,0.35456658952924447,0.4795883539280498
+A2 họ 1 + vol,logk + log_gap + accel + log_since_r1 + vol_z,5,0.4207921787313293,0.35374588856709976,0.4791778971459855
+A3 họ 1 + vol + trend,logk + log_gap + accel + log_since_r1 + vol_z + ser60,6,0.4496392848332926,0.3790782990901049,0.5112902164340609
+A4 A3 + change point,logk + log_gap + accel + log_since_r1 + vol_z + ser60 + cp,7,0.44660990196316874,0.374365955535453,0.5084206827181662
+A5 A4 + regime,logk + log_gap + accel + log_since_r1 + vol_z + ser60 + cp + p_high + drift_s,9,0.43714153863322913,0.364605219121097,0.49967673747633945
+B5 A3 + regime (không cp),logk + log_gap + accel + log_since_r1 + vol_z + ser60 + p_high + drift_s,8,0.43960778372551623,0.36755192761680244,0.5011626667083134

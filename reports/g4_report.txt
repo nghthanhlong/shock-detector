@@ -1,0 +1,154 @@
+G4 REPORT — Họ 2 (volatility), họ 3 (trend), ablation bước 1
+
+======================================================================
+## 0. MÔI TRƯỜNG VÀ THAM SỐ
+======================================================================
+python 3.12.10 | pandas 3.0.6 | numpy 2.5.4 | sklearn 1.9.1
+RV_WIN=30 | TREND_WIN=60 | offset=0 (G3) | n_boot=1000 | seed=42
+Đại diện: họ 2 vol_z = log RV30 chuẩn hóa theo giờ server (mu_h, sigma_h fit trên M1 < tháng test);
+          họ 3 ser60 = efficiency ratio 60 phút có dấu theo chiều basket (<0 = ngược basket).
+
+======================================================================
+## A. ĐẶC TRƯNG VÀ DÒNG BỊ LOẠI
+======================================================================
+Dòng mẫu: 7,889 | nến liền trước không tồn tại (bar_age>0): 2
+  NaN lrv30   : 14
+  NaN ser60   : 36
+  NaN ser30   : 14
+  NaN ret60_z : 36
+Loại (thiếu M1 hoặc cửa sổ không liên tục): 36 dòng = 0.46% (OK < 1%)
+  theo giờ server của t: {1: 10, 2: 7, 3: 7, 4: 3, 18: 1, 19: 4, 20: 4}
+  theo tháng: {'2026-03': 16, '2026-05': 1, '2026-06': 12, '2026-07': 5, '2026-08': 2}
+  dương bị loại: 13
+Tập chung (mọi mô hình G4 đánh giá trên tập này): 7,853 dòng, dương 2115
+
+Phân bố đặc trưng (tập chung):
+          count   mean    std    min     5%    50%    95%    max
+lrv30    7853.0 -6.120  0.472 -7.617 -6.813 -6.162 -5.274 -3.666
+ser60    7853.0 -0.095  0.142 -0.578 -0.326 -0.098  0.143  0.414
+ser30    7853.0 -0.176  0.190 -0.840 -0.473 -0.184  0.149  0.493
+ret60_z  7853.0 -0.556  0.824 -3.222 -1.879 -0.577  0.832  2.287
+Tỷ lệ ser60 < 0 (giá 60 phút qua đi ngược basket): 0.753
+
+μ_h của log RV30 (fold test 08, fit 02–07): min giờ 22 = -6.64, max giờ 16 = -5.72; biên độ = 0.93 log (≈ ×2.5 RV)
+Giờ có ít nến (n < 1000, fold 08): [23]
+  [hình] reports/figures/g4_hour_profile.png
+
+======================================================================
+## B. KIỂM TRA CHỐNG NHÌN TƯƠNG LAI
+======================================================================
+  [OK] B1 nến dùng đã đóng: bar_time + 1 phút ≤ t (mọi dòng)  vi phạm = 0
+  [OK] B2 nến dùng = floor(t) − 1 phút khi bar_age = 0  lag (phút) = [1.0]
+  [OK] B3 cắt M1 tại 10 mốc ngẫu nhiên: đặc trưng nến ≤ mốc không đổi  max |chênh| = 0
+  [OK] B4 nhiễu mọi nến ≥ floor(t), 20 sự kiện: đặc trưng tại t không đổi  bị đổi = 0
+  [OK] B5 độ nhạy của B4: sự kiện kế tiếp (≥ t+3 phút) có đổi  20/20
+  [OK] B6 mu_h, sigma_h không đổi khi nhiễu M1 từ tháng test trở đi (5 fold)  max |chênh| = 0
+
+======================================================================
+## C. LUẬN ĐIỂM DƯ THỪA: TREND vs NHỊP MỞ BẬC (plan 0.2)
+======================================================================
+Spearman trên tập chung (mọi tháng; dòng cùng basket phụ thuộc nhau, p-value chỉ tham khảo).
+log_gap = log(1 + phút từ bậc trước); steps_60m = số bậc của basket mở trong 60 phút qua.
+Kỳ vọng nếu dư thừa: ser60 càng âm khi bậc mở càng dày → rho(ser60, log_gap) > 0, rho(ser60, steps_60m) < 0.
+     x            y  rho_all     p  rho_k2-4  rho_k5-9  rho_k>=10
+ ser60      log_gap   -0.071 0.000    -0.109     0.083      0.353
+ ser60    steps_60m   -0.582 0.000    -0.321    -0.364     -0.543
+ ser60         logk   -0.509 0.000    -0.329    -0.227      0.210
+ ser60 log_since_r1   -0.480 0.000    -0.301    -0.179      0.412
+vol_z*      log_gap   -0.301 0.000    -0.311    -0.298     -0.389
+vol_z*    steps_60m    0.173 0.000     0.022     0.334      0.583
+vol_z*         logk    0.064 0.000     0.002     0.055      0.097
+ ser60       vol_z*   -0.002 0.889     0.162    -0.043     -0.344
+R² của OLS ser60 ~ họ 1 (logk, log_gap, accel, log_since_r1): 0.224 (phần biến thiên của trend đã giải thích bởi trạng thái basket)
+  [hình] reports/figures/g4_trend_vs_pace.png
+
+======================================================================
+## D. ABLATION BƯỚC 1 — PR-AUC GỘP OOS 04–08
+======================================================================
+OOS tập chung: 6,140 dòng | dương 1695 | prevalence 0.2761 | số ngày (cụm bootstrap) 100
+Đối chiếu G1 (tập đầy đủ 6,160 dòng): PR-AUC log(k) = 0.4286 (G1 report: 0.4286)
+
+[D1] PR-AUC gộp (CI 95% bootstrap theo ngày)
+                model  n_feat     ap  ci_lo  ci_hi
+            A0 log(k)       1 0.4266 0.3585 0.4850
+              A1 họ 1       4 0.4212 0.3546 0.4796
+        A2 họ 1 + vol       5 0.4208 0.3537 0.4792
+A3 họ 1 + vol + trend       6 0.4496 0.3791 0.5113
+      B1 log(k) + vol       2 0.4268 0.3595 0.4857
+    B2 log(k) + trend       2 0.4566 0.3846 0.5184
+
+[D2] ΔPR-AUC ghép cặp (CI 95% bootstrap theo ngày)
+                                so_sanh   delta   ci_lo  ci_hi  P(delta>0)  CI_chua_0
+                  A1 họ 1  −  A0 log(k) -0.0054 -0.0142 0.0035       0.131       True
+              A2 họ 1 + vol  −  A1 họ 1 -0.0005 -0.0014 0.0004       0.169       True
+A3 họ 1 + vol + trend  −  A2 họ 1 + vol  0.0288  0.0146 0.0429       1.000      False
+    A3 họ 1 + vol + trend  −  A0 log(k)  0.0230  0.0065 0.0409       0.994      False
+          B1 log(k) + vol  −  A0 log(k)  0.0002 -0.0022 0.0028       0.593       True
+        B2 log(k) + trend  −  A0 log(k)  0.0300  0.0169 0.0452       1.000      False
+
+[D3] PR-AUC theo tháng (độ ổn định; mỗi tháng chỉ ~50–60 basket dương)
+         prevalence  A0 log(k)  A1 họ 1  A2 họ 1 + vol  A3 họ 1 + vol + trend  B1 log(k) + vol  B2 log(k) + trend
+month                                                                                                            
+2026-04      0.2892     0.4294   0.4330         0.4328                 0.4566           0.4353             0.4683
+2026-05      0.2477     0.3849   0.3937         0.3938                 0.4440           0.3946             0.4431
+2026-06      0.3062     0.4309   0.4256         0.4250                 0.4663           0.4435             0.4788
+2026-07      0.2437     0.3293   0.3404         0.3405                 0.3713           0.3408             0.3743
+2026-08      0.2887     0.4764   0.4848         0.4836                 0.5029           0.4864             0.5045
+Số tháng A3 > A0: 5/5
+  [hình] reports/figures/g4_ablation.png
+
+======================================================================
+## E. PHÂN TẦNG THEO ĐỘ SÂU (A3 vs A0)
+======================================================================
+Trong mỗi nhóm k, A0 chỉ còn xếp hạng theo k trong nhóm; Δ đo phần tín hiệu M1 xếp hạng thêm.
+   k    n  pos   prev  ap_A0  ap_A3  delta   ci_lo  ci_hi
+ 2-4 3606  684 0.1897 0.2286 0.2321 0.0035 -0.0102 0.0212
+ 5-9 1522  519 0.3410 0.3469 0.4052 0.0583  0.0255 0.0959
+>=10 1012  492 0.4862 0.5509 0.6047 0.0538  0.0200 0.0980
+
+======================================================================
+## F. MÔ PHỎNG PHANH (ngưỡng chọn trên train) — CẬN TRÊN, KHÔNG PHẢI GIẢM LỖ
+======================================================================
+                model  target  brake_rate_rows  halted_pct  deep_caught  deep_caught_pct  avoided_total  avoided_pct  false_halts  false_halts_per100  false_flag_rows
+            A0 log(k)     0.1            12.48        5.43           42            15.00            769        12.48           64                3.28              369
+            A0 log(k)     0.2            24.09       12.25           81            28.93           1485        24.11          158                8.10              820
+            A0 log(k)     0.3            33.63       19.07          125            44.64           2071        33.62          247               12.66             1208
+              A1 họ 1     0.1            11.04        4.66           39            13.93            708        11.49           52                2.67              318
+              A1 họ 1     0.2            21.43       10.92           72            25.71           1336        21.69          141                7.23              722
+              A1 họ 1     0.3            31.45       17.22          114            40.71           1942        31.53          222               11.38             1123
+A3 họ 1 + vol + trend     0.1            10.54        5.59           51            18.21            869        14.11           58                2.97              282
+A3 họ 1 + vol + trend     0.2            20.55       11.38           88            31.43           1485        24.11          134                6.87              658
+A3 họ 1 + vol + trend     0.3            32.02       18.86          122            43.57           2116        34.35          246               12.61             1136
+Lưu ý: tỷ lệ phanh thực tế (brake_rate_rows) khác nhau giữa mô hình → so sánh công bằng nhất là
+đường cong bậc tránh được – phanh nhầm (G6). Dòng bị loại vì thiếu M1 coi như không có quyết định.
+
+======================================================================
+## G. HỆ SỐ LOGISTIC CHUẨN HÓA (A3, từng fold)
+======================================================================
+(đơn vị: thay đổi log-odds khi đặc trưng tăng 1 SD trên train; ser60 < 0 = ngược basket)
+              2026-04  2026-05  2026-06  2026-07  2026-08   mean  sign_stable
+logk            0.402    0.096    0.315    0.541    0.504  0.372         True
+log_gap        -0.040   -0.081   -0.049    0.018    0.021 -0.026        False
+accel           0.003    0.021    0.014   -0.021   -0.022 -0.001        False
+log_since_r1   -0.061    0.367    0.160   -0.110   -0.081  0.055        False
+vol_z           0.045   -0.004    0.013   -0.001    0.016  0.014        False
+ser60          -0.205   -0.257   -0.234   -0.270   -0.258 -0.245         True
+
+======================================================================
+## H. ĐỘ NHẠY: CÁCH ĐO TREND (so với A2, không dùng để chọn mô hình)
+======================================================================
+                  model     ap  delta_vs_A2  ci_lo  ci_hi
+       A3 ser60 (chính) 0.4496       0.0288 0.0146 0.0429
+   A3' ser30 thay ser60 0.4536       0.0328 0.0197 0.0460
+A3'' ret60_z thay ser60 0.4474       0.0266 0.0133 0.0392
+
+======================================================================
+## I. TIÊU CHÍ HOÀN THÀNH G4 (plan.md)
+======================================================================
+  [OK] Có vol (z theo giờ, fit trên train) và trend (ER có dấu)  
+  [OK] Dòng bị loại < 1%  0.46%
+  [OK] Có ΔPR-AUC kèm CI cho từng bước ablation  6 so sánh
+  [OK] Đã đo tương quan trend – nhịp mở bậc  mục C
+  [OK] Mọi kiểm tra chống nhìn tương lai đạt  mục B
+
+Đã lưu d:\Academic\UET\ATCS\shock-detector\data\interim\g4_features.parquet (đặc trưng thô; vol_z tính lại theo fold khi dùng)

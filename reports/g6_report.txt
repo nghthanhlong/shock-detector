@@ -1,0 +1,181 @@
+G6 — QUY TẮC QUYẾT ĐỊNH, ĐỐI CHỨNG, PURGE, PHÂN TẦNG, ĐỘ NHẠY, CASE STUDY
+BẢN ĐẦY ĐỦ | n_boot = 1000, n_random = 1000, seed = 42
+Chốt trước: RATES = (0.1, 0.2, 0.3), GRID = (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4), m = 2, τ_H = Q(1 − r·0.5) (độ nhạy r·0.333). A3+C2 = KHÁM PHÁ.
+
+========================================================================
+## 0. DỮ LIỆU
+========================================================================
+samples 7,889 | tập đầy đủ (G4/G5) 7,853 | tập chung có C2 7,569
+[0 s]
+
+========================================================================
+## A. MÔ HÌNH (walk-forward, purge t_end < đầu tháng test)
+========================================================================
+OOS tập chung: 5,911 dòng, dương 1637, 1880 basket, 98 ngày | OOS tập đầy đủ: 6,140 dòng
+   tap model    n  pos  pr_auc
+ chung    A0 5911 1637  0.4283
+ chung    A3 5911 1637  0.4541
+ chung A3+C2 5911 1637  0.4749
+ chung depth 5911 1637  0.4188
+day_du    A0 6140 1695  0.4266
+day_du    A3 6140 1695  0.4496
+day_du depth 6140 1695  0.4191
+Đối chiếu G4/G5 (tập đầy đủ): A0 0,4266; A3 0,4496. Tập chung 15b: A3 0,454.
+
+ΔPR-AUC (bootstrap theo ngày, ghép cặp, CI 95%):
+   tap      loai    so_sanh  delta     lo     hi  p_pos
+ chung     chính    A3 − A0 0.0258 0.0090 0.0420  0.999
+ chung  khám phá A3+C2 − A3 0.0208 0.0099 0.0314  0.999
+ chung  khám phá A3+C2 − A0 0.0466 0.0280 0.0631  1.000
+day_du đối chiếu    A3 − A0 0.0230 0.0065 0.0409  0.994
+
+PR-AUC theo tháng (tập chung):
+             A0      A3   A3+C2   depth
+fold                                   
+2026-04  0.4080  0.4311  0.4541  0.4080
+2026-05  0.3882  0.4474  0.4610  0.3882
+2026-06  0.4394  0.4855  0.4987  0.4394
+2026-07  0.3366  0.3826  0.3996  0.3366
+2026-08  0.4846  0.5135  0.5515  0.4846
+[12 s]
+
+========================================================================
+## C. PHANH — BẢN TRIỂN KHAI (ngưỡng = phân vị điểm số TRAIN của từng fold)
+========================================================================
+Quy tắc A: HALT khi score ≥ τ_L. Quy tắc B: τ_L chung với A, τ_H = Q_train(1 − r/2); LIMIT cho mở tối đa 2 bậc rồi HALT. Đối chứng cùng số dòng gắn cờ thực tế mỗi tháng: độ sâu k (phá hòa ngẫu nhiên) và ngẫu nhiên.
+Trích @20% (tập chung; đủ trong g6_brake_deploy.csv):
+                         model            rule  flag_rows_pct  halted_pct  avoided_total  false_halts  deep_caught
+                            A0               A           23.3        11.9         1382.0        148.0         75.0
+                            A0               B           23.3         8.0          991.0         92.0         59.0
+                            A0 B_r/3 (độ nhạy)           23.3         8.0          989.0         92.0         59.0
+         đối chứng độ sâu (A0)               A           23.3        11.9         1382.0        148.0         75.0
+   ngẫu nhiên (A0), trung bình               A           23.3         NaN         3230.5        645.5        168.1
+                            A3               A           20.4        11.2         1417.0        126.0         84.0
+                            A3               B           20.4         8.2         1078.0         91.0         64.0
+                            A3 B_r/3 (độ nhạy)           20.4         7.9         1042.0         86.0         63.0
+         đối chứng độ sâu (A3)               A           20.4         9.9         1212.0        119.0         67.0
+   ngẫu nhiên (A3), trung bình               A           20.4         NaN         3004.4        587.3        157.1
+                         A3+C2               A           22.5        12.7         1573.0        144.0         94.0
+                         A3+C2               B           22.5         9.5         1207.0        105.0         74.0
+                         A3+C2 B_r/3 (độ nhạy)           22.5         9.3         1152.0        106.0         69.0
+      đối chứng độ sâu (A3+C2)               A           22.5        11.3         1337.0        139.0         74.0
+ngẫu nhiên (A3+C2), trung bình               A           22.5         NaN         3173.7        631.0        165.3
+                         depth               A           23.3        11.9         1382.0        148.0         75.0
+                         depth               B           23.3         8.0          991.0         92.0         59.0
+                         depth B_r/3 (độ nhạy)           23.3         8.0          989.0         92.0         59.0
+Δ bootstrap: g6_brake_deploy_delta.csv (21 dòng). [14 s]
+
+========================================================================
+## D. ĐƯỜNG CONG CÔNG BẰNG (cùng tỷ lệ cờ thực tế; phân vị điểm số THÁNG TEST — chỉ để so sánh)
+========================================================================
+A0 trùng đối chứng độ sâu trên toàn lưới: True (thứ hạng giống nhau, cùng phá hòa)
+Δ @10/20/30% (bootstrap theo ngày; d_* = tổng chênh, âm ở d_false là tốt):
+           so_sanh  rate  d_avoided  d_avoided_lo  d_avoided_hi  d_false  d_false_lo  d_false_hi
+   A3 − độ sâu (A)   0.1      199.0         124.0         276.0      9.0        -5.0        23.0
+A3+C2 − độ sâu (A)   0.1      236.0         163.0         317.0      5.0       -10.0        20.0
+    A3+C2 − A3 (A)   0.1       37.0         -19.0          99.0     -4.0       -17.0         9.0
+      depth: B − A   0.1     -131.0        -158.0        -104.0    -13.0       -23.0        -3.0
+         A3: B − A   0.1     -142.0        -171.0        -114.0     -6.0       -16.0         3.0
+      A3+C2: B − A   0.1     -146.0        -178.0        -117.0     -8.0       -18.0         1.0
+   A3 − độ sâu (A)   0.2      219.0         164.0         279.0      1.0       -17.0        19.0
+A3+C2 − độ sâu (A)   0.2      253.0         177.0         326.0      6.0       -14.0        26.0
+    A3+C2 − A3 (A)   0.2       34.0         -17.0          83.0      5.0       -11.0        20.0
+      depth: B − A   0.2     -335.0        -380.0        -290.0    -48.0       -65.0       -33.0
+         A3: B − A   0.2     -336.0        -375.0        -296.0    -28.0       -44.0       -13.0
+      A3+C2: B − A   0.2     -326.0        -368.0        -284.0    -27.0       -42.0       -12.0
+   A3 − độ sâu (A)   0.3      143.0          98.0         188.0     14.0        -4.0        33.0
+A3+C2 − độ sâu (A)   0.3      238.0         175.0         302.0     28.0         5.0        51.0
+    A3+C2 − A3 (A)   0.3       95.0          43.0         144.0     14.0        -5.0        33.0
+      depth: B − A   0.3     -540.0        -590.0        -485.0    -74.0       -98.0       -49.0
+         A3: B − A   0.3     -510.0        -556.0        -461.0    -65.0       -88.0       -42.0
+      A3+C2: B − A   0.3     -533.0        -586.0        -479.0    -77.0       -99.0       -54.0
+[16 s]
+
+========================================================================
+## E. PURGE
+========================================================================
+Bản chính: train = dòng có t_end < đầu tháng test (nhãn đã biết trước khi test bắt đầu).
+Không purge: train = dòng có timestamp < đầu tháng test (gồm dòng có nhãn phụ thuộc tương lai).
+Embargo không áp dụng: train luôn trước test, đặc trưng chỉ dùng nến quá khứ nên không có thông tin
+tháng test đi vào đặc trưng train; kênh rò rỉ duy nhất là nhãn của basket vắt qua mốc cắt, đã purge.
+Dòng bị purge theo fold: {'2026-04': 0, '2026-05': 0, '2026-06': 0, '2026-07': 14, '2026-08': 0}
+model  ap_purge  ap_no_purge  max_abs_score_diff  n_purged_total  avoided20_purge  avoided20_no_purge  false20_purge  false20_no_purge
+   A0    0.4283       0.4281              0.0044              14             1382                1382            148               148
+   A3    0.4541       0.4537              0.0230              14             1417                1413            126               125
+A3+C2    0.4749       0.4743              0.0242              14             1573                1572            144               144
+
+========================================================================
+## F. PHÂN TẦNG k VÀ HỆ SỐ CHUẨN HÓA
+========================================================================
+   k    n  pos  n_basket  ap_A0  ap_A3  ap_A3+C2  d_A3-A0  lo_A3-A0  hi_A3-A0  d_A3+C2-A3  lo_A3+C2-A3  hi_A3+C2-A3
+ 2-4 3465  661      1876 0.2311 0.2368    0.2438   0.0057   -0.0100    0.0242      0.0070      -0.0092       0.0236
+ 5-9 1461  498       447 0.3461 0.4153    0.4378   0.0691    0.0359    0.1064      0.0225       0.0024       0.0482
+>=10  985  478       151 0.5554 0.6109    0.6605   0.0555    0.0196    0.1003      0.0495       0.0256       0.0750
+Lưu ý: trong mỗi tầng A0 vẫn chỉ xếp hạng theo k; ở k = 2–4 chỉ có 3 mức nên AP(A0) gần tỷ lệ dương của tầng.
+
+Hệ số logistic chuẩn hóa (StandardScaler fit trên train từng fold):
+fold                2026-04  2026-05  2026-06  2026-07  2026-08   mean  sign_stable
+model feature                                                                      
+A0    logk            0.442    0.514    0.534    0.542    0.528  0.512         True
+A3    accel           0.004    0.017    0.011   -0.014   -0.013  0.001        False
+      log_gap        -0.044   -0.067   -0.041    0.005    0.003 -0.029        False
+      log_since_r1   -0.031    0.328    0.139   -0.061   -0.007  0.074        False
+      logk            0.378    0.116    0.322    0.493    0.435  0.349         True
+      ser60          -0.198   -0.242   -0.219   -0.256   -0.247 -0.232         True
+      vol_z           0.059    0.018    0.026    0.011    0.033  0.029         True
+A3+C2 accel          -0.000    0.029    0.026    0.001    0.005  0.012        False
+      exc             0.414    0.579    0.552    0.512    0.516  0.515         True
+      log_gap        -0.036   -0.077   -0.061   -0.013   -0.021 -0.042         True
+      log_since_r1   -0.182    0.157    0.001   -0.199   -0.152 -0.075        False
+      logk            0.236   -0.133    0.051    0.247    0.190  0.118        False
+      ser60          -0.102   -0.115   -0.106   -0.155   -0.146 -0.125         True
+      vol_z           0.045    0.011    0.028    0.008    0.028  0.024         True
+[29 s]
+
+========================================================================
+## G. ĐỘ NHẠY (chỉ báo cáo, không dùng chọn mô hình)
+========================================================================
+                              bien_the    so_sanh    n  delta     lo     hi
+                                 chính    A3 − A0 5911 0.0258 0.0090 0.0420
+                                 chính A3+C2 − A3 5911 0.0208 0.0099 0.0314
+                                 chính A3+C2 − A0 5911 0.0466 0.0280 0.0631
+                  (i) chỉ EXACT_UNIQUE    A3 − A0 3657 0.0298 0.0106 0.0477
+                  (i) chỉ EXACT_UNIQUE A3+C2 − A3 3657 0.0160 0.0064 0.0263
+                  (i) chỉ EXACT_UNIQUE A3+C2 − A0 3657 0.0458 0.0265 0.0652
+                    (ii) bỏ ngày 05/08    A3 − A0 5814 0.0248 0.0090 0.0436
+                    (ii) bỏ ngày 05/08 A3+C2 − A3 5814 0.0219 0.0090 0.0328
+                    (ii) bỏ ngày 05/08 A3+C2 − A0 5814 0.0467 0.0284 0.0664
+(iii) trọng số basket (fit + đánh giá)    A3 − A0 5911 0.0130 0.0050 0.0215
+(iii) trọng số basket (fit + đánh giá) A3+C2 − A3 5911 0.0096 0.0041 0.0145
+(iii) trọng số basket (fit + đánh giá) A3+C2 − A0 5911 0.0226 0.0137 0.0315
+         (iv) trọng số k² khi đánh giá    A3 − A0 5911 0.0648 0.0356 0.1062
+         (iv) trọng số k² khi đánh giá A3+C2 − A3 5911 0.0399 0.0197 0.0801
+         (iv) trọng số k² khi đánh giá A3+C2 − A0 5911 0.1047 0.0848 0.1510
+Phanh @20% theo biến thể: g6_sens_brake20.csv. [101 s]
+
+========================================================================
+## H. CASE STUDY 05/08 (ngưỡng triển khai fold 08)
+========================================================================
+Basket ngày 05/08 trong OOS: 15 | SELL BMSFJA9ZX: có | BUY: 11
+BMSFJA9ZX: 54 dòng trong samples, 54 dòng trong tập chung (dòng thiếu không có điểm số).
+target       0.1   0.2  0.3
+model rule                 
+A3    A     10.0   8.0  5.0
+      B     11.0  10.0  7.0
+A3+C2 A     10.0   8.0  5.0
+      B     11.0  10.0  7.0
+depth A     12.0   8.0  6.0
+      B     14.0  10.0  8.0
+(ô trống = không HALT)
+
+========================================================================
+## Z. KIỂM TRA VÀ THỜI GIAN
+========================================================================
+  [OK] y = (M − k ≥ HORIZON)
+  [OK] điểm số/ngưỡng A3 trùng features.walk_forward_m1
+  [OK] sim_A trùng evaluate.brake_sim (mọi mô hình/tỷ lệ)
+  [OK] A0 là hàm tăng của k trong từng fold (A0 ≡ baseline độ sâu về thứ hạng trong tháng)
+  [OK] B không tránh nhiều bậc hơn A ở cùng τ_L (từng basket)
+  [OK] train purge không chứa dòng t_end ≥ mốc cắt
+Tổng 102 s (bootstrap 94 s, ngẫu nhiên 3 s). Ước tính với n_boot = n_random = 1000: ~1.7 phút.
+Kiểm tra: tất cả OK

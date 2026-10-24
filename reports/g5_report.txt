@@ -1,0 +1,239 @@
+G5 REPORT — Họ 4 (change point), họ 5 (regime), ablation bước 2
+
+======================================================================
+## 0. MÔI TRƯỜNG VÀ THAM SỐ CHỐT TRƯỚC
+======================================================================
+python 3.12.10 | pandas 3.0.6 | numpy 2.5.4 | sklearn 1.9.1 | hmmlearn 0.3.3
+n_boot=1000 | seed=42 | n_perturb=10
+Khối M5: 5 nến M1 [T, T+4], đóng tại T+5'; hợp lệ khi đủ 5 nến và 5 return 1' liên tục (gồm nến T−1).
+Ghép tại t: khối T = floor(t, 5') − 5' → TRỄ: t − giờ đóng khối ∈ [0; 5'), tối đa 4 nến M1 đã đóng chưa dùng.
+BOCPD: ret5 có dấu (không chuẩn hóa, giữ chiều tăng/giảm), prior NIG fit trên ret5 train < tháng test, hazard 1/120 (độ nhạy 1/60), r_max=600, chạy liên tục từ 02.
+HMM: z = log RV5 chuẩn hóa theo giờ (fit < tháng test); HMM dùng X = (ret5/sd_train, z).
+  Ứng viên k: (5, 10, 20); tiêu chí chọn (đặt trước, chỉ train fold 04 = nhãn tháng 03): PR-AUC CV 5 nhóm theo ngày của A3 + P(r ≤ k);
+  chọn k cao nhất, nếu k = 10 (mặc định G2) kém k tốt nhất < 0.005 thì giữ 10.
+HMM: 3 state, full cov, 5 khởi tạo (giữ LL train tốt nhất), X = (ret5/sd_train, z), tách chuỗi tại gap > 0 days 06:00:00; đặc trưng CHỈ từ forward_filter.
+  p_high = P(state có mean z cao nhất | x_1..t); drift_s = dấu basket · Σ p_i μ_i(ret) (< 0 = ngược basket).
+Ablation bước 2 (cộng dồn trên A3): A4 = A3 + cp; A5 = A4 + p_high + drift_s. Mốc chính: A3.
+
+======================================================================
+## A. KHỐI M5 VÀ DÒNG BỊ LOẠI
+======================================================================
+Khối có ≥ 1 nến: 41,181 | hợp lệ 40,863 (99.23%) | lý do không hợp lệ: {'thieu_nen': 194, 'noi_qua_khoang_trong': 124}
+  khối không hợp lệ theo giờ server: {0: 137, 2: 1, 3: 8, 17: 1, 18: 2, 19: 5, 20: 6, 21: 15, 22: 131, 23: 12}  (0h/22–23h = mở/đóng phiên)
+Dòng mẫu 7,889 | loại do G4 (M1): 36 | loại THÊM do khối M5 cần dùng không hợp lệ: 0 (0.00%)
+Tổng loại: 36 dòng = 0.46% (OK < 1%)
+Tập chung G5 (mọi mô hình đánh giá trên tập này): 7,853 dòng, dương 2115
+
+BOCPD + HMM 5 fold: 434 s | số khối/fold: {'2026-04': 17176, '2026-05': 22901, '2026-06': 28854, '2026-07': 35109, '2026-08': 40863}
+
+======================================================================
+## B. CHỐT k CỦA P(r ≤ k) TRÊN TRAIN (fold 04: nhãn tháng 03, chuẩn hóa/prior fit < 04)
+======================================================================
+Train fold 04: 1713 dòng, dương 420, 22 ngày
+  model  cv_pr_auc
+     A3     0.3232
+ A3+cp5     0.3212
+A3+cp10     0.3183
+A3+cp20     0.3214
+→ k tốt nhất 20 (0.3214); k=10: 0.3183; chênh +0.0032 → CHỐT k = 10. Đại diện họ 4: cp = P(r ≤ 10).
+  (Chênh CV trên 1 tháng train rất nhỏ so với nhiễu; quy tắc hòa giữ mặc định G2.)
+
+======================================================================
+## C. KIỂM TRA CHỐNG NHÌN TƯƠNG LAI (dữ liệu thật)
+======================================================================
+  [OK] C1 khối dùng đã đóng: block_time + 5' ≤ floor(t) (mọi dòng tập chung)  vi phạm = 0; trễ t − đóng khối: TB 1.65', max 4.999' (< 5'); nến M1 đã đóng chưa dùng ∈ [0, 1, 2, 3, 4]
+  [OK] C2 (G4) nến M1 dùng cho vol/trend đã đóng  vi phạm = 0
+  [OK] C3 cắt M1 tại 10 mốc: khối đã đóng không đổi; khối đang chạy bị đánh dấu không hợp lệ  max |chênh| = 0; khối đang chạy lọt = 0
+  [OK] C4 nhiễu mọi nến ≥ floor(t), 10 sự kiện OOS (mỗi tháng 2): cp5/cp10/cp20/p_high/drift tại t không đổi  bị đổi = 0
+  [OK] C5 độ nhạy của C4: sự kiện kế tiếp (≥ floor(t) + 10') có đổi  10/10  (434 s)
+  [OK] C6 nhiễu khối ≥ tháng test: μ_h,σ_h, X_train HMM (5 fold) và tham số HMM refit (fold 04, 08) không đổi (HMM refit: dung sai 1e-8 vì làm tròn số học khác máy)  max |chênh| norm = 0, X = 0, HMM = 4.60698e-12
+  [OK] C7 đặc trưng = filtered; filtered = smoothed chỉ tại điểm cuối chuỗi, khác ở giữa  |p_high − filtered| = 0; cuối chuỗi 2.6e-13; giữa chuỗi TB max|Δ| 0.110; |LL forward − hmmlearn| = 1.5e-09
+
+======================================================================
+## D. NHIỄU CẢNH BÁO (ngưỡng đặt trước) VÀ QUYẾT ĐỊNH C3
+======================================================================
+[D1] BOCPD (OOS, mỗi tháng từ fold của nó): tỷ lệ khối P(r ≤ 5) > 0.5: 1.62% | giờ cao nhất 14h = 5.79% | ngưỡng hỏng: > 25% tổng hoặc > 50% một giờ
+     mean z OOS theo giờ: min -0.67, max -0.08 (≈ 0 nếu mùa vụ đã khử)
+     theo giờ:
+         n  alarm_rate  mean_cp5  mean_cp  mean_z
+hour                                             
+0     1177       0.020     0.054    0.091  -0.670
+1     1284       0.018     0.051    0.086  -0.646
+2     1291       0.033     0.084    0.168  -0.428
+3     1296       0.042     0.100    0.205  -0.083
+4     1296       0.005     0.044    0.087  -0.103
+5     1296       0.003     0.036    0.069  -0.134
+6     1296       0.004     0.033    0.053  -0.465
+7     1296       0.026     0.068    0.104  -0.290
+8     1296       0.012     0.053    0.100  -0.289
+9     1296       0.005     0.043    0.072  -0.423
+10    1296       0.022     0.054    0.094  -0.314
+11    1296       0.007     0.040    0.071  -0.455
+12    1296       0.018     0.051    0.077  -0.413
+13    1296       0.015     0.051    0.086  -0.463
+14    1296       0.058     0.107    0.181  -0.395
+15    1296       0.033     0.096    0.199  -0.328
+16    1296       0.019     0.074    0.160  -0.348
+17    1296       0.001     0.048    0.096  -0.362
+18    1296       0.000     0.039    0.077  -0.449
+19    1272       0.009     0.044    0.079  -0.420
+20    1266       0.012     0.046    0.075  -0.429
+21    1260       0.008     0.039    0.062  -0.405
+22    1155       0.002     0.028    0.050  -0.476
+     số đợt báo (chuỗi khối liên tiếp > ngưỡng): 176 trên 108 ngày = 1.63 đợt/ngày (hazard 1/120 khối ≈ 2,3 cp/ngày theo prior)
+
+[D2] HMM — mapping state theo fold (mean_0/var_0: ret5/sd_train; mean_1/var_1: z; expected_duration theo khối M5; orig_state = chỉ số state của hmmlearn)
+   fold label  orig_state  expected_duration  mean_0  var_0  mean_1  var_1  occupancy_train  occupancy_test  loglik_train_per_block
+2026-04   low           0              9.915   0.015  0.118  -0.765  0.442            0.432           0.654                  -2.138
+2026-04   mid           2              6.569   0.007  0.591   0.253  0.293            0.408           0.313                  -2.138
+2026-04  high           1              8.916  -0.081  4.403   1.442  0.439            0.160           0.033                  -2.138
+2026-05   low           0              8.282   0.010  0.124  -0.745  0.425            0.443           0.653                  -2.160
+2026-05   mid           1              5.861   0.016  0.620   0.273  0.302            0.413           0.325                  -2.160
+2026-05  high           2              8.490  -0.093  4.756   1.520  0.497            0.144           0.022                  -2.160
+2026-06   low           1              7.658   0.004  0.134  -0.718  0.436            0.455           0.496                  -2.192
+2026-06   mid           2              5.562   0.013  0.663   0.296  0.314            0.417           0.445                  -2.192
+2026-06  high           0              8.212  -0.084  5.148   1.596  0.537            0.127           0.059                  -2.192
+2026-07   low           0              7.153   0.001  0.142  -0.714  0.456            0.453           0.646                  -2.233
+2026-07   mid           2              5.415   0.001  0.692   0.309  0.326            0.430           0.330                  -2.233
+2026-07  high           1              7.135  -0.064  5.413   1.631  0.561            0.117           0.024                  -2.233
+2026-08   low           0              6.830  -0.004  0.146  -0.696  0.457            0.464           0.603                  -2.248
+2026-08   mid           2              5.194   0.005  0.725   0.331  0.334            0.429           0.370                  -2.248
+2026-08  high           1              6.900  -0.053  5.757   1.687  0.594            0.107           0.027                  -2.248
+
+[D3] HMM — độ ổn định giữa fold (trên tháng 03, chung cho mọi fold; p_high trung bình theo fold)
+   fold  agree_argmax_03_vs_fold08  corr_p_high_03_vs_fold08  mean_p_high_03  mean_p_high_test  mean_drift_test  corr_drift_p_high_test
+2026-04                      0.790                     0.892           0.152             0.033            0.009                  -0.977
+2026-05                      0.885                     0.961           0.188             0.022            0.010                  -0.985
+2026-06                      0.948                     0.991           0.213             0.059            0.003                  -0.984
+2026-07                      0.965                     0.997           0.220             0.024           -0.001                  -1.000
+2026-08                      1.000                     1.000           0.234             0.027           -0.002                  -0.885
+     occupancy train nhỏ nhất 0.107 (ngưỡng ≥ 0.02); high lớn nhất 0.160 (≤ 0.6); trùng nhãn tháng 03 nhỏ nhất 0.790 (≥ 0.7)
+
+[D4] Quyết định C3: BOCPD đạt (giữ BOCPD); HMM đạt (giữ HMM).
+
+======================================================================
+## E. ABLATION ĐẦY ĐỦ — PR-AUC GỘP OOS 04–08 (cùng tập dòng)
+======================================================================
+OOS tập chung: 6,140 dòng | dương 1695 | prevalence 0.2761 | 100 ngày (cụm bootstrap)
+Đối chiếu G1 (tập đầy đủ 6,160 dòng): PR-AUC log(k) = 0.4286 (G1 report: 0.4286)
+
+[E1] PR-AUC gộp (CI 95% bootstrap theo ngày)
+                    model  n_feat     ap  ci_lo  ci_hi
+                A0 log(k)       1 0.4266 0.3585 0.4850
+                  A1 họ 1       4 0.4212 0.3546 0.4796
+            A2 họ 1 + vol       5 0.4208 0.3537 0.4792
+    A3 họ 1 + vol + trend       6 0.4496 0.3791 0.5113
+     A4 A3 + change point       7 0.4479 0.3762 0.5091
+           A5 A4 + regime       9 0.4390 0.3658 0.5014
+B5 A3 + regime (không cp)       8 0.4396 0.3676 0.5012
+
+[E2] ΔPR-AUC ghép cặp (CI 95% bootstrap theo ngày, cùng mẫu lặp)
+                                            so_sanh   delta   ci_lo   ci_hi  P(delta>0)  CI_chua_0
+                              A1 họ 1  −  A0 log(k) -0.0054 -0.0142  0.0035       0.131       True
+                          A2 họ 1 + vol  −  A1 họ 1 -0.0005 -0.0014  0.0004       0.169       True
+            A3 họ 1 + vol + trend  −  A2 họ 1 + vol  0.0288  0.0146  0.0429       1.000      False
+     A4 A3 + change point  −  A3 họ 1 + vol + trend -0.0017 -0.0051  0.0011       0.136       True
+            A5 A4 + regime  −  A4 A3 + change point -0.0089 -0.0144 -0.0029       0.000      False
+           A5 A4 + regime  −  A3 họ 1 + vol + trend -0.0106 -0.0175 -0.0037       0.000      False
+B5 A3 + regime (không cp)  −  A3 họ 1 + vol + trend -0.0100 -0.0161 -0.0039       0.000      False
+                A3 họ 1 + vol + trend  −  A0 log(k)  0.0230  0.0065  0.0409       0.994      False
+                       A5 A4 + regime  −  A0 log(k)  0.0124 -0.0049  0.0319       0.929       True
+
+[E3] PR-AUC theo tháng (mỗi tháng ~50–60 basket dương — nhiễu)
+         prevalence  A0 log(k)  A1 họ 1  A2 họ 1 + vol  A3 họ 1 + vol + trend  A4 A3 + change point  A5 A4 + regime  B5 A3 + regime (không cp)
+month                                                                                                                                         
+2026-04      0.2892     0.4294   0.4330         0.4328                 0.4566                0.4495          0.4359                     0.4416
+2026-05      0.2477     0.3849   0.3937         0.3938                 0.4440                0.4440          0.4191                     0.4193
+2026-06      0.3062     0.4309   0.4256         0.4250                 0.4663                0.4686          0.4703                     0.4700
+2026-07      0.2437     0.3293   0.3404         0.3405                 0.3713                0.3703          0.3703                     0.3697
+2026-08      0.2887     0.4764   0.4848         0.4836                 0.5029                0.5030          0.5035                     0.5030
+  số tháng A4 > A3: 3/5
+  số tháng A5 > A3: 2/5
+  số tháng B5 > A3: 2/5
+
+======================================================================
+## F. PHÂN TẦNG THEO ĐỘ SÂU (so với A3)
+======================================================================
+model    k    n  pos  ap_A3  ap_model   delta   ci_lo   ci_hi
+   A4  2-4 3606  684 0.2321    0.2317 -0.0005 -0.0038  0.0029
+   A4  5-9 1522  519 0.4052    0.4032 -0.0020 -0.0097  0.0063
+   A4 >=10 1012  492 0.6047    0.6017 -0.0031 -0.0143  0.0037
+   A5  2-4 3606  684 0.2321    0.2273 -0.0048 -0.0110  0.0022
+   A5  5-9 1522  519 0.4052    0.3965 -0.0088 -0.0241  0.0051
+   A5 >=10 1012  492 0.6047    0.5823 -0.0224 -0.0455 -0.0060
+
+======================================================================
+## G. MÔ PHỎNG PHANH (ngưỡng chọn trên train) — CẬN TRÊN, KHÔNG PHẢI GIẢM LỖ
+======================================================================
+model  target  brake_rate_rows  halted_pct  deep_caught  deep_caught_pct  avoided_total  avoided_pct  false_halts  false_halts_per100
+   A0     0.1            12.48        5.43           42            15.00            769        12.48           64                3.28
+   A0     0.2            24.09       12.25           81            28.93           1485        24.11          158                8.10
+   A0     0.3            33.63       19.07          125            44.64           2071        33.62          247               12.66
+   A3     0.1            10.54        5.59           51            18.21            869        14.11           58                2.97
+   A3     0.2            20.55       11.38           88            31.43           1485        24.11          134                6.87
+   A3     0.3            32.02       18.86          122            43.57           2116        34.35          246               12.61
+   A4     0.1            10.37        5.54           47            16.79            845        13.72           61                3.13
+   A4     0.2            20.26       11.38           85            30.36           1469        23.85          137                7.02
+   A4     0.3            31.97       18.66          121            43.21           2101        34.11          243               12.46
+   A5     0.1             9.98        5.74           48            17.14            856        13.90           64                3.28
+   A5     0.2            20.37       11.48           84            30.00           1480        24.03          140                7.18
+   A5     0.3            32.00       18.86          122            43.57           2112        34.29          246               12.61
+Tỷ lệ phanh thực tế (brake_rate_rows) khác mục tiêu và khác giữa mô hình; so sánh công bằng ở G6.
+
+======================================================================
+## H. HỆ SỐ LOGISTIC CHUẨN HÓA (A5, từng fold; log-odds / 1 SD train)
+======================================================================
+              2026-04  2026-05  2026-06  2026-07  2026-08   mean  sign_stable
+logk            0.329    0.084    0.328    0.555    0.504  0.360         True
+log_gap        -0.055   -0.092   -0.048    0.025    0.023 -0.030        False
+accel           0.008    0.029    0.015   -0.023   -0.022  0.001        False
+log_since_r1   -0.001    0.386    0.154   -0.119   -0.081  0.068        False
+vol_z          -0.036   -0.084   -0.051   -0.054   -0.010 -0.047         True
+ser60          -0.184   -0.236   -0.219   -0.255   -0.250 -0.229         True
+cp             -0.038    0.003    0.019    0.038    0.021  0.009        False
+p_high          0.083    0.083    0.072    0.053    0.022  0.062         True
+drift_s        -0.202   -0.117   -0.037   -0.024   -0.038 -0.084         True
+
+Spearman giữa đặc trưng (fold 08, mọi dòng ≤ 08; mô tả dư thừa):
+         logk  vol_z  ser60    cp  p_high  drift_s
+logk     1.00   0.06  -0.51  0.09    0.01    -0.03
+vol_z    0.06   1.00  -0.00  0.32    0.78    -0.03
+ser60   -0.51  -0.00   1.00 -0.08   -0.05     0.03
+cp       0.09   0.32  -0.08  1.00    0.36     0.04
+p_high   0.01   0.78  -0.05  0.36    1.00    -0.02
+drift_s -0.03  -0.03   0.03  0.04   -0.02     1.00
+
+======================================================================
+## I. ĐỘ NHẠY (CHỈ BÁO CÁO — KHÔNG DÙNG CHỌN MÔ HÌNH)
+======================================================================
+BOCPD hazard 1/60: 52 s
+          variant     ap  delta_vs_A3   ci_lo   ci_hi
+ A3 + cp5 (1/120) 0.4455      -0.0042 -0.0104  0.0023
+A3 + cp10 (1/120) 0.4479      -0.0017 -0.0051  0.0011
+A3 + cp20 (1/120) 0.4457      -0.0039 -0.0085  0.0008
+ A3 + cp10 (1/60) 0.4492      -0.0004 -0.0031  0.0022
+      A3 + p_high 0.4486      -0.0010 -0.0040  0.0024
+     A3 + drift_s 0.4401      -0.0096 -0.0153 -0.0042
+Tỷ lệ khối OOS P(r ≤ 5) > 0.5 với hazard 1/60: 2.25%
+
+======================================================================
+## J. HÌNH
+======================================================================
+05/08 03–18h (basket SELL sâu): mean P(r ≤ 5) = 0.071, max 0.777; mean p_high = 0.036; tỷ lệ khối argmax = high: 0.028; mean drift = -0.0016
+Basket SELL BMSFJA9ZX trong tập chung: 54 dòng; cp TB 0.169; p_high TB 0.095; drift_s TB +0.0037
+  [hình] reports/figures/g5_case_0508.png
+  [hình] reports/figures/g5_bocpd_noise_by_hour.png
+  [hình] reports/figures/g5_ablation.png
+
+======================================================================
+## K. TIÊU CHÍ HOÀN THÀNH G5 (plan.md)
+======================================================================
+  [OK] Dòng bị loại < 1%  0.46%
+  [OK] k và hazard chốt trước test  k = 10, 1/120
+  [OK] Mọi kiểm tra chống nhìn tương lai đạt  mục C
+  [OK] Họ 4 và họ 5 đều có ΔPR-AUC kèm CI  mục E2
+  [OK] Mapping state ghi cho từng fold  mục D2
+  [OK] BOCPD không báo liên tục; HMM ổn định (C3)  mục D4
+  [OK] Baseline G1 trên tập đầy đủ = 0,4286  0.4286
+
+Đã lưu data/interim/g5_features.parquet | tổng thời gian 1073 s

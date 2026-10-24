@@ -1,0 +1,42 @@
+G5 REPORT — Họ 4 (change point), họ 5 (regime), ablation bước 2
+
+======================================================================
+## 0. MÔI TRƯỜNG VÀ THAM SỐ CHỐT TRƯỚC
+======================================================================
+python 3.12.10 | pandas 3.0.6 | numpy 2.5.4 | sklearn 1.9.1 | hmmlearn 0.3.3
+n_boot=1000 | seed=42 | n_perturb=10
+Khối M5: 5 nến M1 [T, T+4], đóng tại T+5'; hợp lệ khi đủ 5 nến và 5 return 1' liên tục (gồm nến T−1).
+Ghép tại t: khối T = floor(t, 5') − 5' → TRỄ: t − giờ đóng khối ∈ [0; 5'), tối đa 4 nến M1 đã đóng chưa dùng.
+BOCPD: z = log RV5 chuẩn hóa theo giờ (fit < tháng test), prior NIG từ z train, hazard 1/120 (độ nhạy 1/60), r_max=600, chạy liên tục từ 02.
+  Ứng viên k: (5, 10, 20); tiêu chí chọn (đặt trước, chỉ train fold 04 = nhãn tháng 03): PR-AUC CV 5 nhóm theo ngày của A3 + P(r ≤ k);
+  chọn k cao nhất, nếu k = 10 (mặc định G2) kém k tốt nhất < 0.005 thì giữ 10.
+HMM: 3 state, full cov, 5 khởi tạo (giữ LL train tốt nhất), X = (ret5/sd_train, z), tách chuỗi tại gap > 0 days 06:00:00; đặc trưng CHỈ từ forward_filter.
+  p_high = P(state có mean z cao nhất | x_1..t); drift_s = dấu basket · Σ p_i μ_i(ret) (< 0 = ngược basket).
+Ablation bước 2 (cộng dồn trên A3): A4 = A3 + cp; A5 = A4 + p_high + drift_s. Mốc chính: A3.
+
+======================================================================
+## A. KHỐI M5 VÀ DÒNG BỊ LOẠI
+======================================================================
+Khối có ≥ 1 nến: 41,181 | hợp lệ 40,863 (99.23%) | lý do không hợp lệ: {'thieu_nen': 194, 'noi_qua_khoang_trong': 124}
+  khối không hợp lệ theo giờ server: {0: 137, 2: 1, 3: 8, 17: 1, 18: 2, 19: 5, 20: 6, 21: 15, 22: 131, 23: 12}  (0h/22–23h = mở/đóng phiên)
+Dòng mẫu 7,889 | loại do G4 (M1): 36 | loại THÊM do khối M5 cần dùng không hợp lệ: 0 (0.00%)
+Tổng loại: 36 dòng = 0.46% (OK < 1%)
+Tập chung G5 (mọi mô hình đánh giá trên tập này): 7,853 dòng, dương 2115
+
+BOCPD + HMM 5 fold: 320 s | số khối/fold: {'2026-04': 17176, '2026-05': 22901, '2026-06': 28854, '2026-07': 35109, '2026-08': 40863}
+
+======================================================================
+## B. CHỐT k CỦA P(r ≤ k) TRÊN TRAIN (fold 04: nhãn tháng 03, chuẩn hóa/prior fit < 04)
+======================================================================
+Train fold 04: 1713 dòng, dương 420, 22 ngày
+  model  cv_pr_auc
+     A3     0.3232
+ A3+cp5     0.3187
+A3+cp10     0.3098
+A3+cp20     0.3169
+→ k tốt nhất 5 (0.3187); k=10: 0.3098; chênh +0.0089 → CHỐT k = 5. Đại diện họ 4: cp = P(r ≤ 5).
+  (Chênh CV trên 1 tháng train rất nhỏ so với nhiễu; quy tắc hòa giữ mặc định G2.)
+
+======================================================================
+## C. KIỂM TRA CHỐNG NHÌN TƯƠNG LAI (dữ liệu thật)
+======================================================================

@@ -1,0 +1,8 @@
+check,ok,note
+C1 khối dùng đã đóng: block_time + 5' ≤ floor(t) (mọi dòng tập chung),True,"vi phạm = 0; trễ t − đóng khối: TB 1.65', max 4.999' (< 5'); nến M1 đã đóng chưa dùng ∈ [0, 1, 2, 3, 4]"
+C2 (G4) nến M1 dùng cho vol/trend đã đóng,True,vi phạm = 0
+C3 cắt M1 tại 10 mốc: khối đã đóng không đổi; khối đang chạy bị đánh dấu không hợp lệ,True,max |chênh| = 0; khối đang chạy lọt = 0
+"C4 nhiễu mọi nến ≥ floor(t), 10 sự kiện OOS (mỗi tháng 2): cp5/cp10/cp20/p_high/drift tại t không đổi",True,bị đổi = 0
+C5 độ nhạy của C4: sự kiện kế tiếp (≥ floor(t) + 10') có đổi,True,10/10  (331 s)
+"C6 nhiễu khối ≥ tháng test: μ_h,σ_h, X_train HMM (5 fold) và tham số HMM refit (fold 04, 08) không đổi (HMM refit: dung sai 1e-8 vì làm tròn số học khác máy)",True,"max |chênh| norm = 0, X = 0, HMM = 1.58755e-12"
+"C7 đặc trưng = filtered; filtered = smoothed chỉ tại điểm cuối chuỗi, khác ở giữa",True,|p_high − filtered| = 0; cuối chuỗi 3.6e-13; giữa chuỗi TB max|Δ| 0.110; |LL forward − hmmlearn| = 1.0e-10
