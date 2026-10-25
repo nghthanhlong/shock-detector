@@ -1,0 +1,80 @@
+
+======================================================================
+## 0. MÔI TRƯỜNG
+======================================================================
+python 3.12.10 | numpy 2.5.4 | pandas 3.0.6 | hmmlearn 0.3.3 | matplotlib 3.11.2
+
+======================================================================
+## A. BOCPD (Adams & MacKay 2007) trên chuỗi giả lập
+======================================================================
+Chuỗi: 1250 bước, cp thật tại [250, 500, 750, 1000]; đoạn (mean, sd): (0,1) | (2,1) | (2,0.3) | (-1,0.3) | (-1,1.5)
+Loại cp: 1 đổi mean, 2 giảm var, 3 đổi mean, 4 tăng var. Prior: NIGPrior(mu0=0.021150958644414013, kappa0=1.0, alpha0=2.0, beta0=1.0423010057306108)
+Hazard 1/120, r_max 600
+
+[A1] P(r_t=0) min/max = 0.008333/0.008333; H = 0.008333
+     -> đúng như paper_notes: P(r=0) ≡ H, không mang thông tin, chỉ xuất để chẩn đoán.
+
+[A2] Phát hiện (báo động = MAP run length tụt; vị trí = t - MAP + 1;
+     khớp nếu trễ ≤ 50 và |sai số vị trí| ≤ 5)
+ seed  delay_cp1  delay_cp2  delay_cp3  delay_cp4  max_|loc_err|  n_detected  false_alarms
+    0          2         27          0          0              1           4             8
+    1          2         34          0          1              2           4             1
+    2          6         23          0          1              1           4             0
+    3          2         26          0          0              1           4             2
+    4          2         25          0          2              5           4             6
+
+Độ nhạy hazard (trung bình 5 seed):
+     delay_cp1  delay_cp2  delay_cp3  delay_cp4  n_detected  false_alarms
+lam                                                                      
+60         2.2       25.6        0.0        0.8         4.0          10.4
+120        2.8       27.0        0.0        0.8         4.0           3.4
+250        3.4       28.6        0.0        0.8         4.0           1.8
+
+[A3] Chọn k cho đại diện cp_recent = P(r_t ≤ k) (trung bình 5 seed)
+ k  peak_cp1  peak_cp2  peak_cp3  peak_cp4  median_xa_cp  q99_xa_cp
+ 5     0.597     0.017       1.0     0.880         0.015      0.174
+10     0.941     0.020       1.0     0.993         0.018      0.272
+20     0.997     0.069       1.0     1.000         0.021      0.428
+Ghi chú: k nhỏ chỉ 'thấy' cp được phát hiện trong ≤ k bước; k lớn tăng mức nền.
+
+[A4] Thời gian: 0.394 ms/bước (G5 ~42.000 khối M5 -> ~17 s/lượt)
+
+======================================================================
+## B. Gaussian HMM 3 state + forward filter tự viết
+======================================================================
+Quan sát 2 chiều (return, log vol). Fit trên 2.000 bước đầu, filter trên 1.000 bước sau.
+
+[B1] Tham số thật (theo thứ tự low/mid/high):
+      mean_ret  mean_logvol  var_ret  var_logvol
+low       0.00         -0.8     0.09       0.062
+mid       0.02          0.0     0.36       0.062
+high     -0.15          1.0     1.44       0.090
+
+Ước lượng sau khi map state theo mean log vol (cột 1):
+label  orig_state  expected_duration  mean_0  var_0  mean_1  var_1
+  low           0             30.954   0.024  0.088  -0.803  0.059
+  mid           1             18.766   0.026  0.360   0.008  0.067
+ high           2             17.361  -0.238  1.475   1.029  0.094
+
+[B2] log-lik forward tự viết = -1131.120019; hmmlearn score = -1131.120019; chênh 2.05e-12
+     |filtered - smoothed| tại điểm cuối: 8.03e-14
+     |filtered - smoothed| các điểm còn lại: trung bình 0.0132, max 0.7254, tỷ lệ bước chênh > 0,1: 0.045
+     Độ chính xác regime (argmax): filtered 0.984 | smoothed 0.995
+     -> smoothed 'tốt hơn' chính là nhờ nhìn tương lai; không được dùng.
+     Đại diện P(high | x_1..t): trung bình khi z=high 0.972, z=low 0.000
+     Trễ bật P(high) > 0,5 khi vào regime high: trung vị 0 bước, max 1, 13 lần vào
+
+======================================================================
+## C. Kiểm tra không nhìn tương lai (đổi dữ liệu sau t)
+======================================================================
+BOCPD, t = 600: max |chênh| mọi cột đến t = 0.0e+00; cp_recent sau t = 0.991 (đối chứng: có đổi)
+HMM filtered, t = 646: max |chênh| đến t = 0.0e+00
+HMM smoothed (đối chứng): max |chênh| đến t = 0.460 -> smoothed rò rỉ tương lai
+  Tại t = 646: filtered P(high) = 0.573 (cả 2 trường hợp); smoothed P(high) = 0.982 (gốc) vs 0.522 (tương lai đổi sang low)
+
+======================================================================
+## D. FILE ĐẦU RA
+======================================================================
+  reports\figures\g2_bocpd_sim.png
+  reports\figures\g2_hmm_sim.png
+  reports\figures\g2_no_lookahead.png

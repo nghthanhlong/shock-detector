@@ -1,0 +1,194 @@
+G1 REPORT — Cơ chế phanh Recovery Basket XAUUSD M1
+
+======================================================================
+## 0. MÔI TRƯỜNG VÀ FILE
+======================================================================
+python 3.12.10 | pandas 3.0.6 | numpy 2.5.4 | sklearn 1.9.1
+file: MILKY_Recovery_Labels_202603_202608.csv | 818,441 bytes | md5 d8aed529dd82
+cột: ['timestamp', 'basket_id', 'side', 'Ri', 'timestamp_quality', 'tick_match_count']
+2 dòng đầu sau khi parse:
+                timestamp  basket_id side  Ri timestamp_quality  tick_match_count
+0 2026-03-02 01:00:33.703  BMM8H21S1  BUY   1      EXACT_UNIQUE                 1
+1 2026-03-02 01:05:06.266  BMM8H21S1  BUY   2      EXACT_UNIQUE                 1
+
+======================================================================
+## A. KIỂM TRA DỮ LIỆU VÀ ĐỐI CHIẾU project_context.md
+======================================================================
+Khoảng thời gian: 2026-03-02 01:00:33.703000 -> 2026-08-31 21:01:08
+BUY/SELL (basket): {'SELL': 3102, 'BUY': 2979}
+
+[A1] Kiểm tra tính sạch
+                                check  n_loi                            ghi_chu
+               NaN trong cột bắt buộc      0                                   
+                Trùng (basket_id, Ri)      0                                   
+Basket thiếu bậc (Ri không phải 1..n)      0                                   
+          Basket có nhiều hơn 1 chiều      0                                   
+               Timestamp giảm theo Ri      0                          kỳ vọng 0
+    Basket cùng chiều chồng thời gian      0 tính theo [R1, Ri cuối]; kỳ vọng 0
+
+[A2] Tổng số
+               metric  computed  expected check
+                 rows     14045     14045    OK
+              baskets      6081      6081    OK
+               max_Ri        55        55    OK
+         EXACT_UNIQUE      9035      9035    OK
+EXACT_AMBIGUOUS_FIRST      2573      2573    OK
+   REPORT_SECOND_ONLY      2437      2437    OK
+
+[A3] Theo tháng (basket tính theo tháng của R1; gap tính theo tháng của dòng)
+  month  baskets  per_day_active  per_day_calendar  P_R1_R2  P_R5_R6  reach_R10_pct  med_gap_min  BUY  SELL  max_Ri
+2026-03     1484          70.667            49.467    0.368    0.779          2.695        5.012  713   771      38
+2026-04     1043          54.895            34.767    0.426    0.792          3.452        5.673  537   506      36
+2026-05      975          54.167            31.452    0.444    0.752          2.564        6.044  471   504      42
+2026-06      932          58.250            31.067    0.410    0.837          3.755        6.126  450   482      41
+2026-07      729          45.562            23.516    0.436    0.835          3.429        7.843  340   389      24
+2026-08      918          51.000            29.613    0.436    0.765          3.922        6.650  468   450      55
+Đối chiếu (|chênh| trong dung sai làm tròn của project_context.md):
+  2026-03: per_day=!! P12=OK P56=OK R10=OK gap=OK
+  2026-04: per_day=OK P12=OK P56=OK R10=OK gap=OK
+  2026-05: per_day=!! P12=OK P56=OK R10=OK gap=OK
+  2026-06: per_day=!! P12=OK P56=OK R10=OK gap=OK
+  2026-07: per_day=!! P12=OK P56=OK R10=OK gap=OK
+  2026-08: per_day=!! P12=OK P56=OK R10=OK gap=OK
+  -> số ô lệch: 5. Lệch 'per_day'/'gap' có thể do khác định nghĩa ngày/gap, hãy xem lại cách tính trong bản tổng hợp.
+
+======================================================================
+## B. P(đi tiếp | đang ở Rk) — đối chiếu bảng trong project_context.md
+======================================================================
+ k    n  p_ge1  p_ge5  p_ge1_exp  p_ge5_exp  n_exp check
+ 1 6081  0.415  0.082       0.41       0.08   6081    OK
+ 2 2523  0.504  0.147       0.50       0.15   2523    OK
+ 3 1272  0.704  0.234       0.70       0.23   1272    OK
+ 5  632  0.790  0.312       0.79       0.31    632    OK
+ 7  372  0.801  0.317       0.80       0.32    372    OK
+10  197  0.792  0.376       0.79       0.38    197    OK
+15   74  0.811  0.432       0.81       0.43     74    OK
+20   32  0.938  0.594       0.94       0.59     32    OK
+
+======================================================================
+## C. ĐỘ SÂU TỐI ĐA M — có dấu hiệu bot giới hạn depth không?
+======================================================================
+max M = 55, số basket đạt max = 1
+Phân bố M >= 10 (M:số basket): 10:41, 11:38, 12:22, 13:11, 14:11, 15:14, 16:6, 17:13, 18:4, 19:5, 20:2, 21:3, 22:4, 23:2, 24:2, 25:1, 26:1, 27:3, 28:1, 29:1, 32:1, 33:1, 34:1, 35:2, 36:1, 38:2, 41:1, 42:1, 46:1, 55:1
+Điểm dồn cục nghi ngờ (M, count, TB lân cận): không thấy
+Nếu có dồn cục: các basket tại M đó là nhãn bị cắt (censored) — ghi vào hạn chế.
+
+======================================================================
+## D. KIỂM TRA TAY 3 BASKET (M≈2, M≈8, M lớn nhất) — đối chiếu với bảng gốc nếu cần
+======================================================================
+
+basket BMMPB9M1H | SELL | M=2
+ Ri               timestamp  gap_min  y_neu_Rk
+  1 2026-03-13 19:57:00.068      NaN       NaN
+  2 2026-03-13 20:00:29.125     3.48       0.0
+
+basket BMRK3RYTL | SELL | M=8
+ Ri               timestamp  gap_min  y_neu_Rk
+  1 2026-07-14 03:43:27.906      NaN       NaN
+  2 2026-07-14 03:52:38.547     9.18       1.0
+  3 2026-07-14 03:59:01.304     6.38       1.0
+  4 2026-07-14 04:02:31.796     3.51       0.0
+  5 2026-07-14 04:09:15.114     6.72       0.0
+  6 2026-07-14 04:11:45.019     2.50       0.0
+  7 2026-07-14 04:15:03.636     3.31       0.0
+  8 2026-07-14 05:00:12.328    45.14       0.0
+
+basket BMSFJA9ZX | SELL | M=55
+ Ri               timestamp  gap_min  y_neu_Rk
+  1 2026-08-05 03:36:26.204      NaN       NaN
+  2 2026-08-05 03:41:33.286     5.12       1.0
+  3 2026-08-05 03:53:04.433    11.52       1.0
+  4 2026-08-05 03:55:19.009     2.24       1.0
+  5 2026-08-05 04:00:09.553     4.84       1.0
+  6 2026-08-05 04:15:02.087    14.88       1.0
+ 52 2026-08-05 17:01:46.669     5.21       0.0
+ 53 2026-08-05 17:05:40.286     3.89       0.0
+ 54 2026-08-05 17:10:00.218     4.33       0.0
+ 55 2026-08-05 17:27:16.170    17.27       0.0
+  ... (đã ẩn 45 dòng giữa)
+
+======================================================================
+## E. BẢNG MẪU (k >= 2)
+======================================================================
+Số dòng k>=2 trước khi cắt: 7,964 | sau cắt 24h cuối: 7,889
+Basket bị loại do bậc cuối nằm trong 24h cuối dữ liệu (2026-08-31 21:01:08): 66
+Tỷ lệ dương tổng: 0.2697 (2128 dòng) | số basket có dòng dương: 366
+
+Theo nhóm k:
+             n  pos  prevalence
+k_bucket                       
+2-4       4643  881      0.1897
+5-9       1999  650      0.3252
+>=10      1247  597      0.4787
+
+Theo tháng:
+            n  pos  prevalence  baskets_pos
+month                                      
+2026-03  1729  421      0.2435           86
+2026-04  1442  417      0.2892           64
+2026-05  1333  330      0.2476           62
+2026-06  1191  371      0.3115           56
+2026-07   990  241      0.2434           48
+2026-08  1204  348      0.2890           51
+
+Purge ranh giới tháng (dòng thuộc basket kéo sang tháng test, bị loại khỏi train):
+  test 2026-04: train=1,729 (purge 0) | test=1,442 | test dương=417
+  test 2026-05: train=3,171 (purge 0) | test=1,333 | test dương=330
+  test 2026-06: train=4,504 (purge 0) | test=1,191 | test dương=371
+  test 2026-07: train=5,681 (purge 14) | test=990 | test dương=241
+  test 2026-08: train=6,685 (purge 0) | test=1,204 | test dương=348
+
+Đã lưu D:\Academic\UET\ATCS\shock-detector\data\interim\samples.parquet
+
+======================================================================
+## F. BASELINE — WALK-FORWARD, PR-AUC GỘP, MÔ PHỎNG PHANH
+======================================================================
+Test months: ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08']. Train luôn là các tháng trước, có purge.
+
+OOS: 6,160 dòng | dương 1707 | prevalence 0.2771
+
+[F1] PR-AUC gộp out-of-sample (CI 95% bootstrap theo ngày, 'prevalence' = mô hình ngẫu nhiên)
+                      model     ap  ci_lo  ci_hi
+    ngau_nhien (prevalence) 0.2771    NaN    NaN
+               luat score=k 0.4210    NaN    NaN
+logistic log(k)  [baseline] 0.4286 0.3614 0.4883
+       logistic ho 1 day du 0.4251 0.3605 0.4840
+ΔPR-AUC (họ 1 đầy đủ − log k) = -0.0035, CI95% [-0.0111, +0.0061], tỷ lệ lần lặp Δ>0 = 0.27 (n_boot=1000)
+Lưu ý: logistic chỉ có log(k) cho cùng thứ hạng với luật score=k, nên hai PR-AUC phải gần bằng nhau.
+
+[F2] PR-AUC theo tháng (độ ổn định)
+  month    n  pos  prevalence  ap_logk  ap_f1
+2026-04 1442  417      0.2892   0.4294 0.4329
+2026-05 1333  330      0.2476   0.3848 0.3936
+2026-06 1191  371      0.3115   0.4376 0.4470
+2026-07  990  241      0.2434   0.3304 0.3423
+2026-08 1204  348      0.2890   0.4779 0.4859
+
+[F3] Mô phỏng phanh tuần tự (gộp 04–08). avoided = CẬN TRÊN số bậc không mở, KHÔNG phải giảm lỗ.
+     deep_caught = basket sâu (M>=7) bị HALT ở dòng y=1; false_halts/100 = basket bị HALT ở dòng y=0 trên 100 basket.
+                      model  brake_rate_rows  halted_baskets  deep_caught_pct  deep_caught  avoided_total  avoided_pct  avoided_deep  false_halts_per100  false_halts  false_flag_rows
+         luat HALT khi k>=3             68.3            50.0             81.8          229           4209         68.3          2827               38.24          746             2782
+         luat HALT khi k>=5             41.4            24.1             55.4          155           2551         41.4          2267               16.20          316             1529
+         luat HALT khi k>=7             27.7            14.4             35.0           98           1707         27.7          1707                9.33          182              966
+        luat HALT khi k>=10             16.6             7.9             21.4           60           1022         16.6          1022                4.87           95              524
+logk  @10% (thr tren train)             12.5             5.4             15.4           43            773         12.5           773                3.23           63              372
+logk  @20% (thr tren train)             24.2            12.3             29.3           82           1491         24.2          1491                8.05          157              824
+logk  @30% (thr tren train)             33.8            19.1             45.0          126           2080         33.8          1987               12.66          247             1213
+ ho1  @10% (thr tren train)             11.3             4.8             15.0           42            744         12.1           744                2.67           52              328
+ ho1  @20% (thr tren train)             21.9            11.4             27.5           77           1374         22.3          1369                7.48          146              739
+ ho1  @30% (thr tren train)             32.2            17.6             42.5          119           1991         32.3          1909               11.53          225             1151
+Do độ sâu rời rạc, tỷ lệ phanh thực tế của baseline có thể lệch khỏi mục tiêu 10/20/30% (xem cột brake_rate_rows).
+
+======================================================================
+## G. KIỂM TRA TỰ ĐỘNG
+======================================================================
+PR-AUC của điểm ngẫu nhiên: 0.2715 vs prevalence 0.2697 -> OK
+
+======================================================================
+## H. TIÊU CHÍ HOÀN THÀNH G1
+======================================================================
+[OK] Tổng số khớp project_context.md
+[OK] Bảng P(đi tiếp | Rk) khớp
+[OK] PR-AUC ngẫu nhiên ≈ prevalence
+[OK] Baseline có PR-AUC gộp kèm CI và đường cong bậc tránh được – phanh nhầm (reports/figures/g1_brake_curve.png)
+[ ] Còn lại (làm tay): so sánh với bản tổng hợp theo tháng; kiểm tra tay 3 basket ở mục D
